@@ -82,9 +82,9 @@ def corr_plot():
     return correlation_with_target_sorted
 
 
-def pairplots():
+def pairplots(wanted_features):
     #pariplots
-    sns.pairplot(df[selected_features], diag_kind='kde')
+    sns.pairplot(full_stats[wanted_features], diag_kind='kde')
     plt.suptitle('Pairplot of Selected Features')
     plt.show()
 
@@ -153,19 +153,24 @@ def train_model(chosen_features, points, learning_rate, epochs):
             
     return weight,bias
 
-def fit(X, y, learning_rate, epochs):
+
+def fit(X, y, learning_rate, epochs, tolerance=1e-6):
+    # Initialize weights and bias
     import numpy as np
     #i know i said it does not use libraries. i used numpy because not using numpy 
     #means doing all vector operations using for loops. with each loop iterating through
     #the whole dataframe which is sized (125687, 20), so it took hours to run.
     #to speed unefficiency i used numpy but the model works without numpy by using the
     #gradient_descent function and train_model() instead of fit()
-    weight = np.random.uniform(-1, 1, size=X.shape[1])
-    bias = random.uniform(-1,1)
+    weights = np.random.uniform(-1, 1, size=X.shape[1])    
+    bias = random.uniform(-1, 1)
     for epoch in range(epochs):
-        weight, bias = gradient_descent_vectorized(X, y, weight, bias, learning_rate)
-        print(f'iteration: {epoch}')
-    return weight, bias
+        # Perform gradient descent
+        weights, bias = gradient_descent_vectorized(X, y, weights, bias, learning_rate)
+        print(f'iteration: {epoch+1}')
+
+    return weights, bias
+
 
 def find_k_nearest_neighbors(data, sample, k):
     distances = [(x, abs(x - sample)) for x in data if isinstance(x, (int, float))]
@@ -261,8 +266,6 @@ def min_max_scaler(data, columns):
 statistics =  full_stats.describe()
 
 
-correlation = corr_plot()
-
 
 
 numeric_stats = ['CL_Gls','CL_G+A','CL_G-PK','CL_PKatt','CL_PK',
@@ -276,6 +279,10 @@ numeric_data = full_stats[numeric_stats]
 numeric_data = numeric_data.apply(pd.to_numeric, errors='coerce')
 numeric_data = numeric_data.dropna()
 numeric_data = min_max_scaler(numeric_data, numeric_stats)
+
+correlation = corr_plot()
+gls_barplot()
+pairplots(numeric_stats)
 
 target_minority_size = 64000
 
@@ -298,11 +305,13 @@ X = full_training_data[['CL_Gls','CL_G+A','CL_G-PK','CL_PKatt','CL_PK',
                  'PK','CL_MP','Ast','cl_winner','WC_Gls','WC_G-PK',
                  'cl_finalist','WC_G+A','Top-Scorer']]
 
-learning_rate = 0.01
+learning_rate = 0.001
 epochs = 10
 #w,b = train_model(numeric_stats, full_training_data, learning_rate, epochs)
 w, b = fit(X, y, learning_rate, epochs)
 predictions = predict_all(test_data, w, b)
 nominees = predictions[predictions['Predicted Percent']>0]
 predictions.to_csv(r"D:\Machine Learning Projects\Ballon Dor Rankings Prediction\results\predictions.csv")
-nominees.to_csv(r"D:\Machine Learning Projects\Ballon Dor Rankings Prediction\results\nominnes.csv")
+nominees = predictions.sort_values(by=['Predicted Percent'],ascending=False,ignore_index=True)
+nominees = nominees[nominees['Predicted Percent']>0]
+nominees.to_csv(r"D:\Machine Learning Projects\Ballon Dor Rankings Prediction\results\nominees5.csv")
