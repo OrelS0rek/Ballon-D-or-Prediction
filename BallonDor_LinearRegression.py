@@ -117,9 +117,31 @@ def gradient_descent(chosen_features, current_weights, current_bias,points, lear
     #applying gradient descent
     new_weights = current_weights-learning_rate*weights_gradient
     new_bias = current_bias-learning_rate*bias_gradient
-    
+
     #returning the new weights and biases for the model
     return new_weights,new_bias
+
+
+def gradient_descent_vectorized(X, y, weights, bias, learning_rate):
+    n = len(y)
+
+    # Calculate predictions
+    predictions = X.dot(weights) + bias
+    
+    # Calculate residuals
+    residuals = y - predictions
+    
+    # Compute gradients
+    weights_gradient = -(2/n) * X.T.dot(residuals)
+    bias_gradient = -(2/n) * residuals.sum()
+    
+    # Update weights and bias
+    weights -= learning_rate * weights_gradient
+    bias -= learning_rate * bias_gradient
+    
+    return weights, bias
+
+
 
 def train_model(chosen_features, points, learning_rate, epochs):
     weight = random.uniform(-1, 1)
@@ -130,6 +152,20 @@ def train_model(chosen_features, points, learning_rate, epochs):
         print(f'iteration: {epoch}\n\nError: {mse}')
             
     return weight,bias
+
+def fit(X, y, learning_rate, epochs):
+    import numpy as np
+    #i know i said it does not use libraries. i used numpy because not using numpy 
+    #means doing all vector operations using for loops. with each loop iterating through
+    #the whole dataframe which is sized (125687, 20), so it took hours to run.
+    #to speed unefficiency i used numpy but the model works without numpy by using the
+    #gradient_descent function and train_model() instead of fit()
+    weight = np.random.uniform(-1, 1, size=X.shape[1])
+    bias = random.uniform(-1,1)
+    for epoch in range(epochs):
+        weight, bias = gradient_descent_vectorized(X, y, weight, bias, learning_rate)
+        print(f'iteration: {epoch}')
+    return weight, bias
 
 def find_k_nearest_neighbors(data, sample, k):
     distances = [(x, abs(x - sample)) for x in data if isinstance(x, (int, float))]
@@ -210,9 +246,18 @@ def predict_player_by_name():
     player_name = input("enter player to predict: ")
     predict(player_name)
     
-#checking whethere Scaling is needed.
-full_stats.drop('Nation',axis=1,inplace=True)
-full_stats = full_stats.fillna(0)
+    
+    
+def min_max_scaler(data, columns):
+     scaled_data = data.copy()
+     for column in columns:
+         minvalue = data[column].min()
+         maxvalue = data[column].max()
+         scaled_data[column] = (data[column]-minvalue)/(maxvalue-minvalue)
+     return scaled_data
+
+
+
 statistics =  full_stats.describe()
 
 
@@ -224,9 +269,13 @@ numeric_stats = ['CL_Gls','CL_G+A','CL_G-PK','CL_PKatt','CL_PK',
                  'CL_Ast','Gls','G+A','G-PK','CL_Starts','PKatt',
                  'PK','CL_MP','Ast','cl_winner','WC_Gls','WC_G-PK',
                  'cl_finalist','WC_G+A','Top-Scorer','Percent']
+#applying min-max scaling to the data
+full_stats = min_max_scaler(full_stats, numeric_stats)
+full_stats = full_stats.fillna(0)
 numeric_data = full_stats[numeric_stats]
 numeric_data = numeric_data.apply(pd.to_numeric, errors='coerce')
 numeric_data = numeric_data.dropna()
+numeric_data = min_max_scaler(numeric_data, numeric_stats)
 
 target_minority_size = 64000
 
@@ -235,15 +284,25 @@ balanced_minority_data = apply_smote(numeric_data, target_minority_size)
 # Inspect the resulting dataset
 print("Size of balanced minority class dataset:", len(balanced_minority_data))
 
+
+#spliting training vs testing data so that:
+    #stats before 2024 are the training data
+    #stats after 2024 are the testing data, meaning we would try to predict the 2024
 train_data = full_stats[full_stats['Year']<2024]
 test_data = full_stats[full_stats['Year']==2024]
 train_data_num = train_data[numeric_stats]
 full_training_data = pd.concat([train_data_num, balanced_minority_data])
-win = full_training_data[full_training_data['Percent']>0]
+y = full_training_data['Percent']
+X = full_training_data[['CL_Gls','CL_G+A','CL_G-PK','CL_PKatt','CL_PK',
+                 'CL_Ast','Gls','G+A','G-PK','CL_Starts','PKatt',
+                 'PK','CL_MP','Ast','cl_winner','WC_Gls','WC_G-PK',
+                 'cl_finalist','WC_G+A','Top-Scorer']]
 
-learning_rate = 0.1
-epochs = 3
-w,b = train_model(numeric_stats, full_training_data, learning_rate, epochs)
-
+learning_rate = 0.01
+epochs = 10
+#w,b = train_model(numeric_stats, full_training_data, learning_rate, epochs)
+w, b = fit(X, y, learning_rate, epochs)
 predictions = predict_all(test_data, w, b)
 nominees = predictions[predictions['Predicted Percent']>0]
+predictions.to_csv(r"D:\Machine Learning Projects\Ballon Dor Rankings Prediction\results\predictions.csv")
+nominees.to_csv(r"D:\Machine Learning Projects\Ballon Dor Rankings Prediction\results\nominnes.csv")
